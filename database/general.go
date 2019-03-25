@@ -1,15 +1,79 @@
 package database
 
 import (
+	"errors"
 	"os"
 	"time"
 
 	mgo "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 var mgoSession *mgo.Session
 var databaseAddress string
 var databaseName = "twitterbot"
+
+// User struct for a twitter user
+type User struct {
+	TwitterID               string    `bson:"twitter_id"`
+	TwitterScreenName       string    `bson:"twitter_screen_name"`
+	ETHAddress              string    `bson:"eth_address"`
+	WasFunded               bool      `bson:"was_funded"`
+	DateOfContact           time.Time `bson:"date_of_contact"`
+	HasUsedClient           bool      `bson:"used_client"`
+	HasBeenAskedForFeedback bool      `bson:"asked_for_feedback"`
+}
+
+// GetUser returns a user object when the user exists
+func GetUser(_twitterID string) (*User, error) {
+	var foundUsers User
+	err := mgoRequest("users", func(c *mgo.Collection) error {
+		return c.Find(nil).One(&foundUsers)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &foundUsers, nil
+}
+
+// UpdateUser updates an existing user in the database
+func UpdateUser(_existingUser User) error {
+	where := bson.M{"twitter_id": _existingUser.TwitterID}
+	change := bson.M{"$set": bson.M{
+		"twitter_screen_name": _existingUser.TwitterID,
+		"eth_address":         _existingUser.ETHAddress,
+		"was_funded":          _existingUser.WasFunded,
+		"date_of_contact":     _existingUser.DateOfContact,
+		"used_client":         _existingUser.HasUsedClient,
+		"asked_for_feedback":  _existingUser.HasBeenAskedForFeedback,
+	}}
+	err := mgoRequest("users", func(c *mgo.Collection) error {
+		return c.Update(where, change)
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CreateUser stores a new user in the database
+func CreateUser(_newUser User) error {
+	user, err := GetUser(_newUser.TwitterID)
+	if user != nil || err != nil {
+		return errors.New("Failed to check whether this user already exists")
+	}
+
+	err = mgoRequest("users", func(c *mgo.Collection) error {
+		return c.Insert(_newUser)
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func getSession() (*mgo.Session, error) {
 	if mgoSession == nil {
