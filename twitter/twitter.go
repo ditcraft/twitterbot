@@ -4,7 +4,12 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
+	"time"
 
+	"github.com/marvinkruse/dit-twitterbot/database"
+
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stevenleeg/go-twitter/twitter"
 )
 
@@ -32,7 +37,7 @@ func handleNewTweet(_user string, _followerCount int, _text string) {
 	// }
 }
 
-func handleNewDM(_user string, _followerCount int, _text string) {
+func handleNewDM(_user string, _userID string, _followerCount int, _text string) {
 	isFollower, err := isFollower(_user)
 	if err != nil {
 		fmt.Println(err)
@@ -50,11 +55,40 @@ func handleNewDM(_user string, _followerCount int, _text string) {
 		// TODO respond
 		return
 	}
-	// TODO check in DB
-	// TODO store in DB
-	// TODO check ETH stuff
-	// TODO respond
-	return
+
+	ethAddress, containsAddress := containsETHAddress(_text)
+	if containsAddress {
+		userObject, err := database.GetUser(_userID)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		if userObject != nil && userObject.WasFunded {
+			// TODO respond
+			return
+		}
+
+		if userObject == nil {
+			userObject = &database.User{
+				TwitterID:         _userID,
+				TwitterScreenName: _user,
+				ETHAddress:        ethAddress,
+				DateOfContact:     time.Now(),
+				WasFunded:         false,
+			}
+			err := database.CreateUser(*userObject)
+			if err != nil {
+				// TODO error handling
+				return
+			}
+		}
+
+		if !userObject.WasFunded {
+			// TODO fund user
+			// TODO set WasFunded to true
+			// TODO respond
+		}
+	}
 }
 
 // isFollower indicates whether the user follows our account
@@ -84,4 +118,17 @@ func hasEnoughFollowers(_user *twitter.User, _amountOfFollowers int) bool {
 		return false
 	}
 	return true
+}
+
+func containsETHAddress(_text string) (string, bool) {
+	if strings.Contains(_text, "0x") {
+		start := strings.Index(_text, "0x")
+		if len(_text[start:]) >= 42 {
+			ethAddress := _text[start : start+42]
+			if common.IsHexAddress(ethAddress) {
+				return ethAddress, true
+			}
+		}
+	}
+	return "", false
 }

@@ -41,7 +41,7 @@ type incomingFollow struct {
 }
 
 type tweetUser struct {
-	ID             int64  `json:"id"`
+	ID             string `json:"id_str"`
 	ScreenName     string `json:"screen_name"`
 	FollowersCount int64  `json:"followers_count"`
 }
@@ -104,6 +104,7 @@ func handleTwitterWebhook(w http.ResponseWriter, r *http.Request) {
 		for i := range data.DirectMessageEvents {
 			handleNewDM(
 				data.User[data.DirectMessageEvents[i].MessageCreated.SenderID].ScreenName,
+				data.DirectMessageEvents[i].MessageCreated.SenderID,
 				int(data.User[data.DirectMessageEvents[i].MessageCreated.SenderID].FollowersCount),
 				data.DirectMessageEvents[i].MessageCreated.MessageData.Text,
 			)
