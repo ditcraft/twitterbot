@@ -114,9 +114,11 @@ func handleTwitterWebhook(w http.ResponseWriter, r *http.Request) {
 
 	if len(data.TweetCreateEvents) > 0 {
 		for i := range data.TweetCreateEvents {
-			if data.ForUserID == os.Getenv("TWITTER_ID") {
+			if data.ForUserID == os.Getenv("TWITTER_ID") && data.TweetCreateEvents[i].User.ID != os.Getenv("TWITTER_ID") {
 				handleNewTweet(
+					data.TweetCreateEvents[i].IDStr,
 					data.TweetCreateEvents[i].User.ScreenName,
+					data.TweetCreateEvents[i].User.ID,
 					int(data.TweetCreateEvents[i].User.FollowersCount),
 					data.TweetCreateEvents[i].Text,
 				)

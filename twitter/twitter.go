@@ -16,13 +16,40 @@ import (
 
 var followerThreshold int
 
-func handleNewTweet(_user string, _followerCount int, _text string) {
+func handleNewTweet(_tweetID string, _user string, _userID string, _followerCount int, _text string) {
 	isFollower, err := isFollower(_user)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+
 	fmt.Printf("[Tweet] %s (Follower: %t, FollowerCount: %d): %s\n", _user, isFollower, _followerCount, _text)
+
+	ethAddress, containsAddress := containsETHAddress(_text)
+
+	if containsAddress {
+		followerCount, _ := strconv.Atoi(os.Getenv("TWITTER_FOLLOWER_THRESHOLD"))
+		if _followerCount < followerCount {
+			err := sendTweet(_tweetID, _user, os.Getenv("TWITTER_RESPONSE_FOLLOWER_COUNT"))
+			if err != nil {
+				fmt.Println(err)
+			}
+			return
+		}
+		if !isFollower {
+			err := sendTweet(_tweetID, _user, os.Getenv("TWITTER_RESPONSE_IS_NO_FOLLOWER"))
+			if err != nil {
+				fmt.Println(err)
+			}
+			return
+		}
+
+		answer := handleETHRequest(_userID, _user, ethAddress)
+		err := sendTweet(_tweetID, _user, answer)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
 }
 
 func handleNewDM(_user string, _userID string, _followerCount int, _text string) {
@@ -56,69 +83,79 @@ func handleNewDM(_user string, _userID string, _followerCount int, _text string)
 	ethAddress, containsAddress := containsETHAddress(_text)
 
 	if containsAddress {
-		userObject, err := database.GetUser(_userID)
-		if err != nil && !strings.Contains(err.Error(), "not found") {
-			err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_ERROR"))
-			if err != nil {
-				fmt.Println(err)
-			}
-			return
-		}
-		if userObject != nil && userObject.WasFunded {
-			err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_ALREADY_FUNDED"))
-			if err != nil {
-				fmt.Println(err)
-			}
-			return
-		}
-
-		if userObject == nil {
-			userObject = &database.User{
-				TwitterID:         _userID,
-				TwitterScreenName: _user,
-				ETHAddress:        ethAddress,
-				DateOfContact:     time.Now(),
-				WasFunded:         false,
-			}
-			err := database.CreateUser(*userObject)
-			if err != nil {
-				err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_ERROR"))
-				if err != nil {
-					fmt.Println(err)
-				}
-				return
-			}
-		}
-
-		if !userObject.WasFunded {
-			err := ethereum.SendEther(ethAddress, 1)
-			if err != nil {
-				err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_ERROR"))
-				if err != nil {
-					fmt.Println(err)
-				}
-				return
-			}
-
-			userObject.WasFunded = true
-
-			if ethAddress != userObject.ETHAddress {
-				userObject.ETHAddress = ethAddress
-			}
-
-			err = database.UpdateUser(*userObject)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-
-			err = sendDM(_userID, os.Getenv("TWITTER_RESPONSE_SUCCESS"))
-			if err != nil {
-				fmt.Println(err)
-			}
-
+		answer := handleETHRequest(_userID, _user, ethAddress)
+		err := sendDM(_userID, answer)
+		if err != nil {
+			fmt.Println(err)
 		}
 	}
+}
+
+func handleETHRequest(_userID string, _userName string, _ethAddress string) string {
+	userObject, err := database.GetUser(_userID)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		return os.Getenv("TWITTER_RESPONSE_ERROR")
+	}
+	if userObject != nil && userObject.WasFunded {
+		return os.Getenv("TWITTER_RESPONSE_ALREADY_FUNDED")
+	}
+
+	if userObject == nil {
+		userObject = &database.User{
+			TwitterID:         _userID,
+			TwitterScreenName: _userName,
+			ETHAddress:        _ethAddress,
+			DateOfContact:     time.Now(),
+			WasFunded:         false,
+		}
+		err := database.CreateUser(*userObject)
+		if err != nil {
+			return os.Getenv("TWITTER_RESPONSE_ERROR")
+		}
+	}
+
+	if !userObject.WasFunded {
+		err := ethereum.SendEther(_ethAddress, 1)
+		if err != nil {
+			return os.Getenv("TWITTER_RESPONSE_ERROR")
+		}
+
+		userObject.WasFunded = true
+
+		if _ethAddress != userObject.ETHAddress {
+			userObject.ETHAddress = _ethAddress
+		}
+
+		err = database.UpdateUser(*userObject)
+		if err != nil {
+			return os.Getenv("TWITTER_RESPONSE_ERROR")
+			// TODO maybe worked nevertheless?
+		}
+	}
+
+	return os.Getenv("TWITTER_RESPONSE_SUCCESS")
+}
+
+func sendTweet(_tweetID string, _username string, _text string) error {
+	client, _, err := GetClient()
+	if err != nil {
+		return err
+	}
+
+	tweetID, err := strconv.ParseInt(_tweetID, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	_, _, err = client.Statuses.Update("@"+_username+" "+_text, &twitter.StatusUpdateParams{
+		InReplyToStatusID: int64(tweetID),
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func sendDM(_userID string, _text string) error {
