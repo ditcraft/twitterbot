@@ -73,7 +73,6 @@ func StartServer() {
 func handleTwitterWebhook(w http.ResponseWriter, r *http.Request) {
 	// A GET request signals that Twitter is attempting a CRC request
 	if r.Method == "GET" {
-
 		keys, ok := r.URL.Query()["crc_token"]
 		if !ok || len(keys) < 1 {
 			w.WriteHeader(400)
@@ -102,12 +101,14 @@ func handleTwitterWebhook(w http.ResponseWriter, r *http.Request) {
 
 	if len(data.DirectMessageEvents) > 0 {
 		for i := range data.DirectMessageEvents {
-			handleNewDM(
-				data.User[data.DirectMessageEvents[i].MessageCreated.SenderID].ScreenName,
-				data.DirectMessageEvents[i].MessageCreated.SenderID,
-				int(data.User[data.DirectMessageEvents[i].MessageCreated.SenderID].FollowersCount),
-				data.DirectMessageEvents[i].MessageCreated.MessageData.Text,
-			)
+			if data.DirectMessageEvents[i].MessageCreated.SenderID != os.Getenv("TWITTER_ID") {
+				handleNewDM(
+					data.User[data.DirectMessageEvents[i].MessageCreated.SenderID].ScreenName,
+					data.DirectMessageEvents[i].MessageCreated.SenderID,
+					int(data.User[data.DirectMessageEvents[i].MessageCreated.SenderID].FollowersCount),
+					data.DirectMessageEvents[i].MessageCreated.MessageData.Text,
+				)
+			}
 		}
 	}
 
