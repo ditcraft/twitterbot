@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/marvinkruse/dit-twitterbot/database"
+	"github.com/marvinkruse/dit-twitterbot/ethereum"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stevenleeg/go-twitter/twitter"
@@ -22,25 +23,15 @@ func handleNewTweet(_user string, _followerCount int, _text string) {
 		return
 	}
 	fmt.Printf("[Tweet] %s (Follower: %t, FollowerCount: %d): %s\n", _user, isFollower, _followerCount, _text)
-
-	// if !strings.Contains(tweet.Text, "@"+os.Getenv("TWITTER_HANDLE")) || !isFollower(tweet.User.ScreenName) || !hasEnoughFollowers(tweet.User, followerThreshold) {
-	// 	return
-	// }
-	// if strings.Contains(tweet.Text, "0x") {
-	// 	ethAddress := tweet.Text[strings.Index(tweet.Text, "0x"):40]
-	// 	if !common.IsHexAddress(ethAddress) {
-	// 		return
-	// 	}
-	// 	// TODO add to DB
-	// 	// TODO fund address
-	// 	_ = ethAddress
-	// }
 }
 
 func handleNewDM(_user string, _userID string, _followerCount int, _text string) {
 	isFollower, err := isFollower(_user)
 	if err != nil {
-		fmt.Println(err)
+		err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_ERROR"))
+		if err != nil {
+			fmt.Println(err)
+		}
 		return
 	}
 
@@ -48,23 +39,36 @@ func handleNewDM(_user string, _userID string, _followerCount int, _text string)
 
 	followerCount, _ := strconv.Atoi(os.Getenv("TWITTER_FOLLOWER_THRESHOLD"))
 	if _followerCount < followerCount {
-		// TODO respond
+		err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_FOLLOWER_COUNT"))
+		if err != nil {
+			fmt.Println(err)
+		}
 		return
 	}
 	if !isFollower {
-		// TODO respond
+		err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_IS_NO_FOLLOWER"))
+		if err != nil {
+			fmt.Println(err)
+		}
 		return
 	}
 
 	ethAddress, containsAddress := containsETHAddress(_text)
+
 	if containsAddress {
 		userObject, err := database.GetUser(_userID)
-		if err != nil {
-			fmt.Println(err)
+		if err != nil && !strings.Contains(err.Error(), "not found") {
+			err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_ERROR"))
+			if err != nil {
+				fmt.Println(err)
+			}
 			return
 		}
 		if userObject != nil && userObject.WasFunded {
-			// TODO respond
+			err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_ALREADY_FUNDED"))
+			if err != nil {
+				fmt.Println(err)
+			}
 			return
 		}
 
@@ -78,17 +82,71 @@ func handleNewDM(_user string, _userID string, _followerCount int, _text string)
 			}
 			err := database.CreateUser(*userObject)
 			if err != nil {
-				// TODO error handling
+				err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_ERROR"))
+				if err != nil {
+					fmt.Println(err)
+				}
 				return
 			}
 		}
 
 		if !userObject.WasFunded {
-			// TODO fund user
-			// TODO set WasFunded to true
-			// TODO respond
+			err := ethereum.SendEther(ethAddress, 1)
+			if err != nil {
+				err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_ERROR"))
+				if err != nil {
+					fmt.Println(err)
+				}
+				return
+			}
+
+			userObject.WasFunded = true
+
+			if ethAddress != userObject.ETHAddress {
+				userObject.ETHAddress = ethAddress
+			}
+
+			err = database.UpdateUser(*userObject)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			err = sendDM(_userID, os.Getenv("TWITTER_RESPONSE_SUCCESS"))
+			if err != nil {
+				fmt.Println(err)
+			}
+
 		}
 	}
+}
+
+func sendDM(_userID string, _text string) error {
+	client, _, err := GetClient()
+	if err != nil {
+		return err
+	}
+
+	_, _, err = client.DirectMessages.EventsNew(&twitter.DirectMessageEventsNewParams{
+		Event: &twitter.DirectMessageEvent{
+			Type: "message_create",
+			Message: &twitter.DirectMessageEventMessage{
+				Target: &twitter.DirectMessageTarget{
+					RecipientID: _userID,
+				},
+				Data: &twitter.DirectMessageData{
+					Text: _text,
+				},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("[DM] Responded with: " + _text)
+
+	return nil
 }
 
 // isFollower indicates whether the user follows our account

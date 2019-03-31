@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	mgo "gopkg.in/mgo.v2"
@@ -41,7 +42,7 @@ func GetUser(_twitterID string) (*User, error) {
 func UpdateUser(_existingUser User) error {
 	where := bson.M{"twitter_id": _existingUser.TwitterID}
 	change := bson.M{"$set": bson.M{
-		"twitter_screen_name": _existingUser.TwitterID,
+		"twitter_screen_name": _existingUser.TwitterScreenName,
 		"eth_address":         _existingUser.ETHAddress,
 		"was_funded":          _existingUser.WasFunded,
 		"date_of_contact":     _existingUser.DateOfContact,
@@ -61,7 +62,7 @@ func UpdateUser(_existingUser User) error {
 // CreateUser stores a new user in the database
 func CreateUser(_newUser User) error {
 	user, err := GetUser(_newUser.TwitterID)
-	if user != nil || err != nil {
+	if user != nil || (err != nil && !(strings.Contains(err.Error(), "not found"))) {
 		return errors.New("Failed to check whether this user already exists")
 	}
 
