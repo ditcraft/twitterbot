@@ -1,28 +1,37 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"flag"
 	"os"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/joho/godotenv"
 	"github.com/marvinkruse/dit-twitterbot/database"
 	"github.com/marvinkruse/dit-twitterbot/twitter"
 )
 
 func main() {
+	flag.Set("alsologtostderr", "true")
+	flag.Set("log_dir", "./log")
+	flag.Set("v", "0")
+	flag.Parse()
+	glog.Info("Starting ditCraft twitter bot...")
+
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		glog.Fatal("Error loading .env file")
 	}
 
 	if os.Getenv("TWITTER_CONSUMER_KEY") == "" || os.Getenv("TWITTER_CONSUMER_SECRET") == "" || os.Getenv("TWITTER_ACCESS_TOKEN") == "" || os.Getenv("TWITTER_ACCESS_SECRET") == "" {
-		log.Fatal("Consumer key/secret and Access token/secret required")
+		glog.Fatal("Consumer key/secret and Access token/secret required")
 	}
 
 	// Start API server for the Twitter Webhook
 	go twitter.StartServer()
+
+	// Start buffered channel to process twitter api calls
+	go twitter.MonitorRatelimit()
 
 	// Wait 2 seconds in order to get the server up and running
 	time.Sleep(2 * time.Second)
@@ -32,7 +41,7 @@ func main() {
 	if err != nil {
 		err = database.CreateOAuthToken()
 		if err != nil {
-			log.Fatal("Creation of OAuth Token failed: " + err.Error())
+			glog.Fatal("Creation of OAuth Token failed: " + err.Error())
 		}
 
 	}
@@ -40,7 +49,7 @@ func main() {
 	// Create Twitter Webhook Subscription
 	err = twitter.InitializeWebhook()
 	if err != nil {
-		fmt.Println(err)
+		glog.Error(err)
 	}
 
 	select {}

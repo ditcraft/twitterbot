@@ -1,11 +1,12 @@
 package twitter
 
 import (
-	"log"
 	"os"
+	"time"
 
 	"github.com/dghubble/oauth1"
 	twitterOAuth "github.com/dghubble/oauth1/twitter"
+	"github.com/golang/glog"
 	"github.com/marvinkruse/dit-twitterbot/database"
 	"github.com/stevenleeg/go-twitter/twitter"
 )
@@ -18,11 +19,34 @@ type OAuthRequest struct {
 	RequestToken string
 }
 
+// Stores all threads waiting to be unlocked
+var requestQueue chan chan bool
+
+// MonitorRatelimit will ensure that all twitter calls are executed at most
+// once per two seconds
+func MonitorRatelimit() {
+	requestQueue = make(chan chan bool, 500)
+
+	for {
+		time.Sleep(2 * time.Second)
+		request := <-requestQueue
+		close(request)
+	}
+}
+
+// awaitRatelimit will add the current thread's execution to a queue and will
+// block until it is released by the ratelimiting thread
+func awaitRatelimit() {
+	await := make(chan bool)
+	requestQueue <- await
+	<-await
+}
+
 // GetClient returns a twitter client
 func GetClient() (*twitter.Client, *database.OAuthToken, error) {
 	oauthToken, err := database.FindOAuthTokenByHandle(os.Getenv("TWITTER_HANDLE"))
 	if err != nil {
-		log.Printf("Could not find OAuth token for %s", os.Getenv("TWITTER_HANDLE"))
+		glog.Errorf("Could not find OAuth token for %s", os.Getenv("TWITTER_HANDLE"))
 		return nil, nil, err
 	}
 
