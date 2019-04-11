@@ -6,11 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 
+	"github.com/golang/glog"
 	"github.com/marvinkruse/dit-twitterbot/database"
 	"github.com/stevenleeg/go-twitter/twitter"
 )
@@ -66,7 +66,7 @@ func StartServer() {
 	http.HandleFunc("/webhook/twitter", handleTwitterWebhook)
 	err := http.ListenAndServeTLS(":"+os.Getenv("TWITTER_WEB_HOOK_PORT"), os.Getenv("SERVER_SSL_CERT_PATH"), os.Getenv("SERVER_SLL_KEY_PATH"), nil)
 	if err != nil {
-		fmt.Println(err)
+		glog.Error(err)
 	}
 }
 
@@ -93,7 +93,7 @@ func handleTwitterWebhook(w http.ResponseWriter, r *http.Request) {
 	data := &incomingWebhook{}
 	err := decoder.Decode(data)
 	if err != nil {
-		log.Println(err)
+		glog.Error(err)
 		w.WriteHeader(400)
 		w.Write([]byte("Bad request"))
 		return
@@ -147,7 +147,7 @@ func InitializeWebhook() error {
 			return err
 		}
 
-		fmt.Printf("Webhook %s created successfully", id)
+		glog.Infof("Webhook %s created successfully", id)
 		database.SetKey("webhookID", id)
 	}
 

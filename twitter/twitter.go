@@ -1,12 +1,12 @@
 package twitter
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/marvinkruse/dit-twitterbot/database"
 	"github.com/marvinkruse/dit-twitterbot/ethereum"
 
@@ -17,87 +17,116 @@ import (
 var followerThreshold int
 
 func handleNewTweet(_tweetID string, _user string, _userID string, _followerCount int, _text string) {
-	isFollower, err := isFollower(_user)
+	twitterUser, err := getUser(_user)
 	if err != nil {
-		fmt.Println(err)
+		glog.Error(err)
 		return
 	}
 
-	fmt.Printf("[Tweet] %s (Follower: %t, FollowerCount: %d): %s\n", _user, isFollower, _followerCount, _text)
+	glog.Infof("[Tweet] %s (Follower: %t, FollowerCount: %d): %s\n", _user, twitterUser.Following, _followerCount, _text)
+
+	if !twitterUser.Following {
+		err := sendTweet(_tweetID, _user, os.Getenv("TWITTER_RESPONSE_IS_NO_FOLLOWER"))
+		if err != nil {
+			glog.Error(err)
+		}
+		return
+	}
 
 	ethAddress, containsAddress := containsETHAddress(_text)
 
 	if containsAddress {
-		followerCount, _ := strconv.Atoi(os.Getenv("TWITTER_FOLLOWER_THRESHOLD"))
-		if _followerCount < followerCount {
-			err := sendTweet(_tweetID, _user, os.Getenv("TWITTER_RESPONSE_FOLLOWER_COUNT"))
-			if err != nil {
-				fmt.Println(err)
-			}
-			return
+		user, err := database.GetUser(_userID)
+		if err != nil && !strings.Contains(err.Error(), "not found") {
+			glog.Error(err)
 		}
-		if !isFollower {
-			err := sendTweet(_tweetID, _user, os.Getenv("TWITTER_RESPONSE_IS_NO_FOLLOWER"))
-			if err != nil {
-				fmt.Println(err)
+		if user == nil {
+			passedKYC := doKYC(twitterUser)
+			if !passedKYC {
+				err := sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_KYC_FAIL_TWEET"))
+				if err != nil {
+					glog.Error(err)
+				}
+				return
 			}
-			return
 		}
 
-		answer := handleETHRequest(_userID, _user, ethAddress)
-		err := sendTweet(_tweetID, _user, answer)
+		answer := handleETHRequest(_userID, _user, ethAddress, false)
+		err = sendTweet(_tweetID, _user, answer)
 		if err != nil {
-			fmt.Println(err)
+			glog.Error(err)
 		}
 	}
 }
 
 func handleNewDM(_user string, _userID string, _followerCount int, _text string) {
-	isFollower, err := isFollower(_user)
+	twitterUser, err := getUser(_user)
 	if err != nil {
-		err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_ERROR"))
+		err := sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_ERROR"))
 		if err != nil {
-			fmt.Println(err)
+			glog.Error(err)
 		}
 		return
 	}
 
-	fmt.Printf("[DM] %s (Follower: %t, FollowerCount: %d): %s\n", _user, isFollower, _followerCount, _text)
+	glog.Infof("[DM] %s (Follower: %t, FollowerCount: %d): %s\n", _user, twitterUser.Following, _followerCount, _text)
 
-	followerCount, _ := strconv.Atoi(os.Getenv("TWITTER_FOLLOWER_THRESHOLD"))
-	if _followerCount < followerCount {
-		err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_FOLLOWER_COUNT"))
+	if !twitterUser.Following {
+		err := sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_IS_NO_FOLLOWER"))
 		if err != nil {
-			fmt.Println(err)
-		}
-		return
-	}
-	if !isFollower {
-		err := sendDM(_userID, os.Getenv("TWITTER_RESPONSE_IS_NO_FOLLOWER"))
-		if err != nil {
-			fmt.Println(err)
+			glog.Error(err)
 		}
 		return
 	}
 
-	ethAddress, containsAddress := containsETHAddress(_text)
+	dbUser, err := database.GetUser(_userID)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		glog.Error(err)
+	}
+	if dbUser == nil {
+		passedKYC := doKYC(twitterUser)
+		if !passedKYC {
+			err := sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_KYC_FAIL_DM"))
+			if err != nil {
+				glog.Error(err)
+			}
+			return
+		}
+	}
 
-	if containsAddress {
-		answer := handleETHRequest(_userID, _user, ethAddress)
-		err := sendDM(_userID, answer)
+	wasCommand, err := handleCommand(_user, _userID, _text)
+	if err != nil {
+		glog.Error(err)
+		err := sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_ERROR"))
 		if err != nil {
-			fmt.Println(err)
+			glog.Error(err)
+		}
+		return
+	}
+
+	if !wasCommand {
+		ethAddress, containsAddress := containsETHAddress(_text)
+
+		if containsAddress {
+			answer := handleETHRequest(_userID, _user, ethAddress, true)
+			err := sendDM(_user, _userID, answer)
+			if err != nil {
+				glog.Error(err)
+			}
 		}
 	}
 }
 
-func handleETHRequest(_userID string, _userName string, _ethAddress string) string {
+func handleETHRequest(_userID string, _userName string, _ethAddress string, _viaDM bool) string {
 	userObject, err := database.GetUser(_userID)
 	if err != nil && !strings.Contains(err.Error(), "not found") {
 		return os.Getenv("TWITTER_RESPONSE_ERROR")
 	}
 	if userObject != nil && userObject.WasFunded {
-		return os.Getenv("TWITTER_RESPONSE_ALREADY_FUNDED")
+		if _viaDM {
+			return os.Getenv("TWITTER_RESPONSE_ALREADY_FUNDED_DM")
+		}
+		return os.Getenv("TWITTER_RESPONSE_ALREADY_FUNDED_TWEET")
 	}
 
 	if userObject == nil {
@@ -128,8 +157,7 @@ func handleETHRequest(_userID string, _userName string, _ethAddress string) stri
 
 		err = database.UpdateUser(*userObject)
 		if err != nil {
-			return os.Getenv("TWITTER_RESPONSE_ERROR")
-			// TODO maybe worked nevertheless?
+			glog.Error(err)
 		}
 	}
 
@@ -147,6 +175,8 @@ func sendTweet(_tweetID string, _username string, _text string) error {
 		return err
 	}
 
+	awaitRatelimit()
+
 	_, _, err = client.Statuses.Update("@"+_username+" "+_text, &twitter.StatusUpdateParams{
 		InReplyToStatusID: int64(tweetID),
 	})
@@ -155,14 +185,18 @@ func sendTweet(_tweetID string, _username string, _text string) error {
 		return err
 	}
 
+	glog.Info("[Tweet] Responded to " + _username + " with: " + _text)
+
 	return nil
 }
 
-func sendDM(_userID string, _text string) error {
+func sendDM(_user string, _userID string, _text string) error {
 	client, _, err := GetClient()
 	if err != nil {
 		return err
 	}
+
+	awaitRatelimit()
 
 	_, _, err = client.DirectMessages.EventsNew(&twitter.DirectMessageEventsNewParams{
 		Event: &twitter.DirectMessageEvent{
@@ -181,29 +215,28 @@ func sendDM(_userID string, _text string) error {
 		return err
 	}
 
-	fmt.Println("[DM] Responded with: " + _text)
+	glog.Info("[DM] Responded to " + _user + " with: " + _text)
 
 	return nil
 }
 
-// isFollower indicates whether the user follows our account
-func isFollower(_screenName string) (bool, error) {
+// getUser retrieves a twitter user object
+func getUser(_screenName string) (*twitter.User, error) {
 	_client, _, err := GetClient()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
+
+	awaitRatelimit()
 
 	user, _, err := _client.Users.Show(&twitter.UserShowParams{
 		ScreenName: _screenName,
 	})
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	if !user.Following {
-		return false, nil
-	}
-	return true, nil
+	return user, nil
 }
 
 // hasEnoughFollowers indicates whether the user has enough followers
@@ -212,6 +245,24 @@ func hasEnoughFollowers(_user *twitter.User, _amountOfFollowers int) bool {
 	if _user.FollowersCount < _amountOfFollowers {
 		return false
 	}
+	return true
+}
+
+func doKYC(_user *twitter.User) bool {
+	if _user.Verified {
+		return true
+	}
+
+	followerCount, _ := strconv.Atoi(os.Getenv("TWITTER_FOLLOWER_THRESHOLD"))
+	if _user.FollowersCount < followerCount {
+		return false
+	}
+
+	statusesCount, _ := strconv.Atoi(os.Getenv("TWITTER_FOLLOWER_THRESHOLD"))
+	if _user.StatusesCount < statusesCount {
+		return true
+	}
+
 	return true
 }
 
@@ -226,4 +277,23 @@ func containsETHAddress(_text string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func handleCommand(_user string, _userID string, _text string) (bool, error) {
+	if strings.HasPrefix(_text, "!") {
+		var err error
+		switch {
+		case strings.HasPrefix(_text, "!commands"):
+			err = sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_COMMAND_LIST"))
+		case strings.HasPrefix(_text, "!problem"):
+			err = sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_COMMAND_PROBLEM"))
+		default:
+			err = sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_COMMAND_NOT_FOUND"))
+		}
+		if err != nil {
+			return true, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
