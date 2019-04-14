@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/EagleChen/mapmutex"
 	"github.com/golang/glog"
 	"github.com/joho/godotenv"
 	"github.com/marvinkruse/dit-twitterbot/database"
@@ -26,6 +27,9 @@ func main() {
 	if os.Getenv("TWITTER_CONSUMER_KEY") == "" || os.Getenv("TWITTER_CONSUMER_SECRET") == "" || os.Getenv("TWITTER_ACCESS_TOKEN") == "" || os.Getenv("TWITTER_ACCESS_SECRET") == "" {
 		glog.Fatal("Consumer key/secret and Access token/secret required")
 	}
+
+	// Creating a MapMutex to prevent users flooding the twitterbot
+	twitter.PerUserMutex = mapmutex.NewCustomizedMapMutex(200, 10000000000, 100000000, 1.1, 0.2)
 
 	// Start API server for the Twitter Webhook
 	go twitter.StartServer()

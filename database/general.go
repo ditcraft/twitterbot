@@ -19,7 +19,9 @@ type User struct {
 	TwitterID               string    `bson:"twitter_id"`
 	TwitterScreenName       string    `bson:"twitter_screen_name"`
 	ETHAddress              string    `bson:"eth_address"`
-	WasFunded               bool      `bson:"was_funded"`
+	PassedKYCDemo           bool      `bson:"passed_kyc_demo"`
+	PassedKYCLive           bool      `bson:"passed_kyc_live"`
+	SkipKYC                 bool      `bson:"skip_kyc"`
 	DateOfContact           time.Time `bson:"date_of_contact"`
 	HasUsedClient           bool      `bson:"used_client"`
 	HasBeenAskedForFeedback bool      `bson:"asked_for_feedback"`
@@ -44,7 +46,8 @@ func UpdateUser(_existingUser User) error {
 	change := bson.M{"$set": bson.M{
 		"twitter_screen_name": _existingUser.TwitterScreenName,
 		"eth_address":         _existingUser.ETHAddress,
-		"was_funded":          _existingUser.WasFunded,
+		"passed_kyc_demo":     _existingUser.PassedKYCDemo,
+		"passed_kyc_live":     _existingUser.PassedKYCLive,
 		"date_of_contact":     _existingUser.DateOfContact,
 		"used_client":         _existingUser.HasUsedClient,
 		"asked_for_feedback":  _existingUser.HasBeenAskedForFeedback,

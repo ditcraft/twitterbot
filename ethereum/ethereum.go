@@ -5,21 +5,137 @@ import (
 	"errors"
 	"math/big"
 	"os"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/marvinkruse/dit-twitterbot/smartcontracts/ditCoordinator"
+	"github.com/marvinkruse/dit-twitterbot/smartcontracts/ditToken"
 )
 
-// SendEther will send a specified amount of ETH (in wei) to the target address
-func SendEther(_targetAddress string, _amount int64) error {
+// Mutex to keep the nonces in order
+var Mutex = &sync.Mutex{}
+
+// KYCPassed will add an address to the list of allowed accounts to interact
+// with the ditCoordinator(s) in the demo and/or live contract.
+func KYCPassed(_address string, _live bool) error {
+	connection, err := getConnection()
+	if err != nil {
+		return err
+	}
+
+	userAddress := common.HexToAddress(_address)
+
+	ditCoordinatorInstance, err := getDitCoordinatorInstance(connection, _live)
+	if err != nil {
+		return err
+	}
+
+	alreadyPassedKYC, err := ditCoordinatorInstance.PassedKYC(nil, userAddress)
+	if err != nil {
+		return err
+	}
+
+	if alreadyPassedKYC {
+		return nil
+	}
+
+	auth, err := populateTx(connection)
+	if err != nil {
+		return err
+	}
+
+	_, err = ditCoordinatorInstance.PassKYC(auth, userAddress)
+	if err != nil {
+		return err
+	}
+
+	waitingFor := 0
+	passedKYC := false
+	for !passedKYC {
+		waitingFor += 2
+		time.Sleep(2 * time.Second)
+
+		// Checking the KYC status every 2 seconds
+		passedKYC, err = ditCoordinatorInstance.PassedKYC(nil, userAddress)
+		if err != nil {
+			return err
+		}
+		// If we are waiting for more than 2 minutes, the transaction might have failed
+		if waitingFor > 180 {
+			return errors.New("Transaction failed")
+		}
+	}
+
+	return nil
+}
+
+// SendDitTokens will send a specified amount of xDit tokens to the target address
+func SendDitTokens(_targetAddress string) error {
+	connection, err := getConnection()
+	if err != nil {
+		return err
+	}
+
+	targetAddress := common.HexToAddress(_targetAddress)
+
+	intValue, _ := strconv.Atoi(os.Getenv("DIT_TOKEN_AMOUNT"))
+	bigIntValue := big.NewInt(int64(intValue))
+	bigIntWeiValue := new(big.Int).Mul(bigIntValue, big.NewInt(1000000000000000000))
+
+	ditTokenInstance, err := getDitTokenInstance(connection)
+	if err != nil {
+		return err
+	}
+
+	oldxDitBalance, err := ditTokenInstance.BalanceOf(nil, targetAddress)
+	if err != nil {
+		return err
+	}
+
+	if oldxDitBalance.Cmp(bigIntWeiValue) != -1 {
+		return nil
+	}
+
+	auth, err := populateTx(connection)
+	if err != nil {
+		return err
+	}
+
+	_, err = ditTokenInstance.Mint(auth, targetAddress, bigIntWeiValue)
+	if err != nil {
+		return err
+	}
+
+	waitingFor := 0
+	newxDitBalance := oldxDitBalance
+	for newxDitBalance.Cmp(oldxDitBalance) == 0 {
+		waitingFor += 2
+		time.Sleep(2 * time.Second)
+
+		// Checking the balance of the user every 2 seconds, if it changed, a transaction was executed
+		newxDitBalance, err = ditTokenInstance.BalanceOf(nil, targetAddress)
+		if err != nil {
+			return err
+		}
+		// If we are waiting for more than 2 minutes, the transaction might have failed
+		if waitingFor > 180 {
+			return errors.New("Transaction failed")
+		}
+	}
+
+	return nil
+}
+
+// SendXDaiCent will send a cent of xDai to the target address
+func SendXDaiCent(_targetAddress string) error {
 	if len(_targetAddress) < 40 || len(_targetAddress) > 42 {
 		return errors.New("Address has a wrong length")
-	}
-	if _amount <= 0 {
-		return errors.New("Faulty amount to be sent")
 	}
 
 	connection, err := getConnection()
@@ -27,15 +143,24 @@ func SendEther(_targetAddress string, _amount int64) error {
 		return err
 	}
 
-	weiAmount := etherToWei(big.NewInt(_amount))
+	weiAmount := big.NewInt(10000000000000000)
 	targetAddress := common.HexToAddress(_targetAddress)
+
+	xDaiBalanceTarget, err := GetBalance(_targetAddress)
+	if err != nil {
+		return err
+	}
+
+	if xDaiBalanceTarget.Cmp(weiAmount) != -1 {
+		return nil
+	}
 
 	ethBalance, err := GetBalance(os.Getenv("ETHEREUM_ADDRESS"))
 	if err != nil {
 		return err
 	}
 
-	// If our account doesn't have enough ether
+	// If our account doesn't have enough xDai
 	if ethBalance.Cmp(weiAmount) != 1 {
 		return errors.New("Bot account doesn't have enough funds")
 	}
@@ -65,7 +190,7 @@ func SendEther(_targetAddress string, _amount int64) error {
 
 	// Minimum gas price is 10 gwei for now, which works best for rinkeby
 	// Will be changed later on
-	defaultGasPrice := big.NewInt(10000000000)
+	defaultGasPrice := big.NewInt(1000000000)
 	if gasPrice.Cmp(defaultGasPrice) != 1 {
 		gasPrice = defaultGasPrice
 	}
@@ -94,6 +219,23 @@ func SendEther(_targetAddress string, _amount int64) error {
 	err = connection.SendTransaction(context.Background(), signedTx)
 	if err != nil {
 		return err
+	}
+
+	waitingFor := 0
+	newxDaiBalanceTarget := xDaiBalanceTarget
+	for newxDaiBalanceTarget.Cmp(xDaiBalanceTarget) == 0 {
+		waitingFor += 2
+		time.Sleep(2 * time.Second)
+
+		// Checking the balance of the user every 2 seconds, if it changed, a transaction was executed
+		newxDaiBalanceTarget, err = GetBalance(_targetAddress)
+		if err != nil {
+			return err
+		}
+		// If we are waiting for more than 2 minutes, the transaction might have failed
+		if waitingFor > 180 {
+			return errors.New("Transaction failed")
+		}
 	}
 
 	return nil
@@ -133,15 +275,15 @@ func populateTx(_connection *ethclient.Client) (*bind.TransactOpts, error) {
 		return nil, errors.New("Failed to retrieve nonce for ethereum transaction")
 	}
 	// Retrieving the current non-pending nonce of our address
-	nonpendingNonce, err := _connection.NonceAt(context.Background(), common.HexToAddress(os.Getenv("ETHEREUM_ADDRESS")), nil)
+	nonPendingNonce, err := _connection.NonceAt(context.Background(), common.HexToAddress(os.Getenv("ETHEREUM_ADDRESS")), nil)
 	if err != nil {
 		return nil, errors.New("Failed to retrieve nonce for ethereum transaction")
 	}
 
 	// Edge-Case for slow nodes
 	nonce := pendingNonce
-	if nonpendingNonce > pendingNonce {
-		nonce = nonpendingNonce
+	if nonPendingNonce > pendingNonce {
+		nonce = nonPendingNonce
 	}
 
 	// Retrieving the suggested gasprice by the network
@@ -152,7 +294,7 @@ func populateTx(_connection *ethclient.Client) (*bind.TransactOpts, error) {
 
 	// Minimum gas price is 10 gwei for now, which works best for rinkeby
 	// Will be changed later on
-	defaultGasPrice := big.NewInt(10000000000)
+	defaultGasPrice := big.NewInt(1000000000)
 	if gasPrice.Cmp(defaultGasPrice) != 1 {
 		gasPrice = defaultGasPrice
 	}
@@ -173,6 +315,37 @@ func weiToEther(wei *big.Int) *big.Int {
 
 func etherToWei(ether *big.Int) *big.Int {
 	return new(big.Int).Mul(ether, big.NewInt(1000000000000000000))
+}
+
+// getDitTokenInstance will return an instance of the deployed ditToken contract
+func getDitTokenInstance(_connection *ethclient.Client) (*ditToken.MintableERC20, error) {
+	ditTokenAddress := common.HexToAddress(os.Getenv("CONTRACT_DIT_TOKEN"))
+
+	// Create a new instance of the ditToken contract to access it
+	ditTokenInstance, err := ditToken.NewMintableERC20(ditTokenAddress, _connection)
+	if err != nil {
+		return nil, errors.New("Failed to find ditToken at provided address")
+	}
+
+	return ditTokenInstance, nil
+}
+
+// getDitCoordinatorInstance will return an instance of the deployed ditCoordinator contract
+func getDitCoordinatorInstance(_connection *ethclient.Client, _live bool) (*ditCoordinator.DitCoordinator, error) {
+	var ditCoordinatorAddress common.Address
+	if _live {
+		ditCoordinatorAddress = common.HexToAddress(os.Getenv("CONTRACT_DIT_COORDINATOR_LIVE"))
+	} else {
+		ditCoordinatorAddress = common.HexToAddress(os.Getenv("CONTRACT_DIT_COORDINATOR_DEMO"))
+	}
+
+	// Create a new instance of the ditToken contract to access it
+	ditCoordinatorInstance, err := ditCoordinator.NewDitCoordinator(ditCoordinatorAddress, _connection)
+	if err != nil {
+		return nil, errors.New("Failed to find ditCoordinator at provided address")
+	}
+
+	return ditCoordinatorInstance, nil
 }
 
 // getConnection will return a connection to the ethereum blockchain
