@@ -178,7 +178,7 @@ func handleKYCApprove(_userID string, _userName string, _ethAddress string, _via
 		}
 	}
 
-	if !userObject.PassedKYCDemo || (!userObject.PassedKYCLive && _liveKYC) {
+	if (!userObject.PassedKYCDemo || (!userObject.PassedKYCLive && _liveKYC)) && _viaDM {
 		err := sendDM(_userName, _userID, os.Getenv("TWITTER_RESPONSE_STARTING_ETHEREUM_TXS"))
 		if err != nil {
 			glog.Error(err)
