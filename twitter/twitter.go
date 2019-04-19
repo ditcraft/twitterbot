@@ -16,6 +16,7 @@ import (
 )
 
 var followerThreshold int
+var isFollower map[string]bool
 
 // PerUserMutex will block on a userid basis to prevent spamming from one user
 var PerUserMutex *mapmutex.Mutex
@@ -27,53 +28,54 @@ func handleNewTweet(_tweetID string, _user string, _userID string, _followerCoun
 		defer PerUserMutex.Unlock(_userID)
 	}
 
-	twitterUser, err := getUser(_user)
-	if err != nil {
-		glog.Error(err)
-		return
-	}
+	if strings.Contains(_text, "verif") || strings.Contains(_text, "KYC") {
+		ethAddress, containsAddress := containsETHAddress(_text)
+		if containsAddress {
+			twitterUser, err := getUser(_user)
+			if err != nil {
+				glog.Error(err)
+				return
+			}
 
-	glog.Infof("[Tweet] %s (Follower: %t, FollowerCount: %d): %s\n", _user, twitterUser.Following, _followerCount, _text)
+			glog.Infof("[Tweet] %s (Follower: %t, FollowerCount: %d): %s\n", _user, twitterUser.Following, _followerCount, _text)
 
-	if !twitterUser.Following {
-		err := sendTweet(_tweetID, _user, os.Getenv("TWITTER_RESPONSE_IS_NO_FOLLOWER"))
-		if err != nil {
-			glog.Error(err)
-		}
-		return
-	}
-
-	ethAddress, containsAddress := containsETHAddress(_text)
-
-	if containsAddress {
-		user, err := database.GetUser(_userID)
-		if err != nil && !strings.Contains(err.Error(), "not found") {
-			glog.Error(err)
-		}
-
-		passedFullKYC := false
-
-		if user != nil && user.SkipKYC == true {
-			passedFullKYC = true
-		} else if user == nil || !user.PassedKYCDemo || !user.PassedKYCLive {
-			var passedKYC bool
-			passedKYC, passedFullKYC = doKYC(twitterUser)
-			if !passedKYC {
-				err := sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_KYC_FAIL_TWEET"))
+			if !twitterUser.Following {
+				err := sendTweet(_tweetID, _user, os.Getenv("TWITTER_RESPONSE_IS_NO_FOLLOWER"))
 				if err != nil {
 					glog.Error(err)
 				}
-				alertAdmin(_user + os.Getenv("TWITTER_ADMIN_NOTIFY_NOKYC"))
 				return
-			} else if !passedFullKYC {
-				alertAdmin(_user + os.Getenv("TWITTER_ADMIN_NOTIFY_HALFKYC"))
 			}
-		}
 
-		answer := handleKYCApprove(_userID, _user, ethAddress, false, passedFullKYC)
-		err = sendTweet(_tweetID, _user, answer)
-		if err != nil {
-			glog.Error(err)
+			user, err := database.GetUser(_userID)
+			if err != nil && !strings.Contains(err.Error(), "not found") {
+				glog.Error(err)
+			}
+
+			passedFullKYC := false
+
+			if user != nil && user.SkipKYC == true {
+				passedFullKYC = true
+			} else if user == nil || !user.PassedKYCDemo || !user.PassedKYCLive {
+				var passedKYC bool
+				passedKYC, passedFullKYC = doKYC(twitterUser)
+				if !passedKYC {
+					err := sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_KYC_FAIL_TWEET"))
+					if err != nil {
+						glog.Error(err)
+					}
+					alertAdmin(_user + os.Getenv("TWITTER_ADMIN_NOTIFY_NOKYC"))
+					return
+				} else if !passedFullKYC {
+					alertAdmin(_user + os.Getenv("TWITTER_ADMIN_NOTIFY_HALFKYC"))
+				}
+			}
+
+			answer := handleKYCApprove(_userID, _user, ethAddress, false, passedFullKYC)
+			err = sendTweet(_tweetID, _user, answer)
+			if err != nil {
+				glog.Error(err)
+			}
 		}
 	}
 }
@@ -114,7 +116,7 @@ func handleNewDM(_user string, _userID string, _followerCount int, _text string)
 		return
 	}
 
-	if !wasCommand {
+	if !wasCommand && strings.Contains(_text, "verif") || strings.Contains(_text, "KYC") {
 		ethAddress, containsAddress := containsETHAddress(_text)
 		if containsAddress {
 			dbUser, err := database.GetUser(_userID)
@@ -319,6 +321,8 @@ func getUser(_screenName string) (*twitter.User, error) {
 		return nil, err
 	}
 
+	user.Following = isFollower[user.IDStr]
+
 	return user, nil
 }
 
@@ -431,4 +435,30 @@ func handleCommand(_user string, _userID string, _text string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func GetFollowers() {
+	for {
+		client, _, err := GetClient()
+		if err != nil {
+			glog.Error(err)
+		}
+
+		isFollower = make(map[string]bool)
+		awaitRatelimit()
+
+		followers, _, err := client.Followers.List(&twitter.FollowerListParams{
+			IncludeUserEntities: &[]bool{false}[0],
+		})
+		if err != nil {
+			glog.Error(err)
+		}
+
+		i := 0
+		for _, user := range followers.Users {
+			isFollower[user.IDStr] = true
+			i++
+		}
+		time.Sleep(120 * time.Minute)
+	}
 }

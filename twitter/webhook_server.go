@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/marvinkruse/dit-twitterbot/database"
@@ -115,20 +116,24 @@ func handleTwitterWebhook(w http.ResponseWriter, r *http.Request) {
 	if len(data.TweetCreateEvents) > 0 {
 		for i := range data.TweetCreateEvents {
 			if data.ForUserID == os.Getenv("TWITTER_ID") && data.TweetCreateEvents[i].User.ID != os.Getenv("TWITTER_ID") {
-				handleNewTweet(
-					data.TweetCreateEvents[i].IDStr,
-					data.TweetCreateEvents[i].User.ScreenName,
-					data.TweetCreateEvents[i].User.ID,
-					int(data.TweetCreateEvents[i].User.FollowersCount),
-					data.TweetCreateEvents[i].Text,
-				)
+				if !strings.HasPrefix("RT", data.TweetCreateEvents[i].Text) {
+					handleNewTweet(
+						data.TweetCreateEvents[i].IDStr,
+						data.TweetCreateEvents[i].User.ScreenName,
+						data.TweetCreateEvents[i].User.ID,
+						int(data.TweetCreateEvents[i].User.FollowersCount),
+						data.TweetCreateEvents[i].Text,
+					)
+				}
 			}
 		}
 	}
 
-	// if len(data.FollowEvents) > 0 {
-	// 	go server.processFollows(data.FollowEvents)
-	// }
+	if len(data.FollowEvents) > 0 {
+		for _, newFollower := range data.FollowEvents {
+			isFollower[newFollower.Source.ID] = true
+		}
+	}
 
 	w.WriteHeader(200)
 	w.Write([]byte("OK"))

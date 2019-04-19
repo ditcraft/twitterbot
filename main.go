@@ -56,5 +56,10 @@ func main() {
 		glog.Error(err)
 	}
 
+	time.Sleep(2 * time.Second)
+
+	// Start twitter follower update service
+	go twitter.GetFollowers()
+
 	select {}
 }
