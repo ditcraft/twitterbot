@@ -445,20 +445,31 @@ func GetFollowers() {
 		}
 
 		isFollower = make(map[string]bool)
-		awaitRatelimit()
+		stillChecking := true
+		amountOfFollowers := 0
+		currentCursor := int64(-1)
 
-		followers, _, err := client.Followers.List(&twitter.FollowerListParams{
-			IncludeUserEntities: &[]bool{false}[0],
-		})
-		if err != nil {
-			glog.Error(err)
+		for stillChecking {
+			awaitRatelimit()
+			followers, _, err := client.Followers.List(&twitter.FollowerListParams{
+				IncludeUserEntities: &[]bool{false}[0],
+				Count:               200,
+				Cursor:              currentCursor,
+			})
+			if err != nil {
+				glog.Error(err)
+			}
+			for _, user := range followers.Users {
+				isFollower[user.IDStr] = true
+				amountOfFollowers++
+			}
+			if followers.NextCursor != 0 {
+				currentCursor = followers.NextCursor
+			} else {
+				stillChecking = false
+			}
 		}
-
-		i := 0
-		for _, user := range followers.Users {
-			isFollower[user.IDStr] = true
-			i++
-		}
+		glog.Info("Refreshed " + strconv.Itoa(amountOfFollowers) + " followers")
 		time.Sleep(120 * time.Minute)
 	}
 }
