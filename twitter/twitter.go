@@ -7,11 +7,10 @@ import (
 	"time"
 
 	"github.com/EagleChen/mapmutex"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/golang/glog"
 	"github.com/marvinkruse/dit-twitterbot/database"
 	"github.com/marvinkruse/dit-twitterbot/ethereum"
-
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/stevenleeg/go-twitter/twitter"
 )
 

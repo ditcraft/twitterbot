@@ -31,7 +31,7 @@ type User struct {
 func GetUser(_twitterID string) (*User, error) {
 	var foundUsers User
 	err := mgoRequest("users", func(c *mgo.Collection) error {
-		return c.Find(nil).One(&foundUsers)
+		return c.Find(bson.M{"twitter_id": _twitterID}).One(&foundUsers)
 	})
 	if err != nil {
 		return nil, err
