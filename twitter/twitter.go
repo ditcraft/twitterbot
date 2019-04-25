@@ -298,7 +298,7 @@ func sendDM(_user string, _userID string, _text string) error {
 }
 
 func alertAdmin(_text string) {
-	err := sendDM(os.Getenv("TWITTER_ADMIN_USER_NAME"), os.Getenv("TWITTER_ADMIN_USER_ID"), _text)
+	err := sendDM(os.Getenv("TWITTER_ALERT_ADMIN_USER_NAME"), os.Getenv("TWITTER_ALERT_ADMIN_USER_ID"), _text)
 	if err != nil {
 		glog.Error(err)
 	}
@@ -407,19 +407,96 @@ func skipKYC(_username string) string {
 	return "Successfully KYCed user " + _username
 }
 
+func resetKYC(_username string) string {
+	if strings.HasPrefix(_username, "@") {
+		_username = _username[1:]
+	}
+
+	twitterUser, err := getUser(_username)
+	if err != nil {
+		glog.Error(err)
+		return os.Getenv("TWITTER_ADMIN_ERROR")
+	}
+
+	userObject, err := database.GetUser(twitterUser.IDStr)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		glog.Error(err)
+		return os.Getenv("TWITTER_ADMIN_ERROR")
+	}
+
+	if userObject == nil {
+		return "Couldn't find user " + _username
+	}
+
+	userObject.PassedKYCDemo = false
+	userObject.PassedKYCLive = false
+
+	err = database.UpdateUser(*userObject)
+	if err != nil {
+		glog.Error(err)
+		return os.Getenv("TWITTER_ADMIN_ERROR")
+	}
+
+	return "Successfully resetted KYC for user " + _username
+}
+
+func retryKYC(_username string) string {
+	if strings.HasPrefix(_username, "@") {
+		_username = _username[1:]
+	}
+
+	twitterUser, err := getUser(_username)
+	if err != nil {
+		glog.Error(err)
+		return os.Getenv("TWITTER_ADMIN_ERROR")
+	}
+
+	userObject, err := database.GetUser(twitterUser.IDStr)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		glog.Error(err)
+		return os.Getenv("TWITTER_ADMIN_ERROR")
+	}
+
+	if userObject == nil {
+		return "Couldn't find user " + _username
+	}
+
+	passedKYC, passedFullKYC := doKYC(twitterUser)
+	if !passedKYC {
+		return "User hasn't passed the KYC, you can pre-approve him with '!kyc " + twitterUser.ScreenName + "' and then try again"
+	}
+
+	answer := handleKYCApprove(userObject.TwitterID, userObject.TwitterScreenName, userObject.ETHAddress, false, passedFullKYC)
+
+	if answer != os.Getenv("TWITTER_RESPONSE_SUCCESS") {
+		return "There was an error while executing the KYC for user " + _username
+	}
+
+	return "Successfully resetted KYC for user " + _username
+}
 func handleCommand(_user string, _userID string, _text string) (bool, error) {
 	if strings.HasPrefix(_text, "!") {
 		var err error
 		switch {
 		case strings.HasPrefix(_text, "!command"), strings.HasPrefix(_text, "!help"):
-			if _userID == os.Getenv("TWITTER_ADMIN_USER_ID") {
+			if strings.Contains(os.Getenv("TWITTER_ADMIN_USER_IDS"), _userID) {
 				err = sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_COMMAND_LIST_ADMIN"))
 			} else {
 				err = sendDM(_user, _userID, os.Getenv("TWITTER_RESPONSE_COMMAND_LIST"))
 			}
 		case strings.HasPrefix(_text, "!kyc"):
-			if _userID == os.Getenv("TWITTER_ADMIN_USER_ID") {
+			if strings.Contains(os.Getenv("TWITTER_ADMIN_USER_IDS"), _userID) {
 				answer := skipKYC(_text[5:])
+				err = sendDM(_user, _userID, answer)
+			}
+		case strings.HasPrefix(_text, "!reset"):
+			if strings.Contains(os.Getenv("TWITTER_ADMIN_USER_IDS"), _userID) {
+				answer := resetKYC(_text[7:])
+				err = sendDM(_user, _userID, answer)
+			}
+		case strings.HasPrefix(_text, "!retry"):
+			if strings.Contains(os.Getenv("TWITTER_ADMIN_USER_IDS"), _userID) {
+				answer := retryKYC(_text[7:])
 				err = sendDM(_user, _userID, answer)
 			}
 		case strings.HasPrefix(_text, "!problem"):
