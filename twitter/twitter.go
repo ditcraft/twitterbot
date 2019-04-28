@@ -335,6 +335,11 @@ func hasEnoughFollowers(_user *twitter.User, _amountOfFollowers int) bool {
 }
 
 func doKYC(_user *twitter.User) (bool, bool) {
+	lowKYCpassed := false
+	highKYCpassed := false
+
+	// If the user is verified on twitter (blue checkmark) he is
+	// automatically fully verified
 	if _user.Verified {
 		return true, true
 	}
@@ -342,6 +347,7 @@ func doKYC(_user *twitter.User) (bool, bool) {
 	followerCountLow, _ := strconv.Atoi(os.Getenv("TWITTER_FOLLOWER_THRESHOLD_LOW"))
 	statusesCountLow, _ := strconv.Atoi(os.Getenv("TWITTER_TWEET_THRESHOLD_LOW"))
 
+	// If the user has less than the low-kyc amounts he'll not get through
 	if _user.FollowersCount < followerCountLow || _user.StatusesCount < statusesCountLow {
 		return false, false
 	}
@@ -349,11 +355,35 @@ func doKYC(_user *twitter.User) (bool, bool) {
 	followerCountHigh, _ := strconv.Atoi(os.Getenv("TWITTER_FOLLOWER_THRESHOLD_HIGH"))
 	statusesCountHigh, _ := strconv.Atoi(os.Getenv("TWITTER_TWEET_THRESHOLD_HIGH"))
 
+	// If the user has more then the low-kyc amounts but less than the high-kyc amounts
+	// he'll be qualified to use the demo mode only
 	if _user.FollowersCount < followerCountHigh || _user.StatusesCount < statusesCountHigh {
-		return true, false
+		lowKYCpassed = true
 	}
 
-	return true, true
+	// If the user has more than the high-kyc amounts, he'll be qualified to use
+	// the live mode as well
+	if _user.FollowersCount >= followerCountHigh && _user.StatusesCount >= statusesCountHigh {
+		highKYCpassed = true
+	}
+
+	// Correction of the outcome based on the account age, to prevent new fake accounts
+	twitterDateLayout := "Mon Jan 02 15:04:05 -0700 2006"
+	createDate, _ := time.Parse(twitterDateLayout, _user.CreatedAt)
+	lowDays, _ := strconv.Atoi(os.Getenv("TWITTER_ACCOUNT_AGE_LOW"))
+	highDays, _ := strconv.Atoi(os.Getenv("TWITTER_ACCOUNT_AGE_HIGH"))
+	lowTimeAgo := time.Now().AddDate(0, 0, -lowDays)
+	highTimeAgo := time.Now().AddDate(0, 0, -highDays)
+
+	if !createDate.Before(lowTimeAgo) {
+		lowKYCpassed = false
+		highKYCpassed = false
+	}
+	if !createDate.Before(highTimeAgo) {
+		highKYCpassed = false
+	}
+
+	return lowKYCpassed, highKYCpassed
 }
 
 func containsETHAddress(_text string) (string, bool) {
@@ -546,6 +576,6 @@ func GetFollowers() {
 			}
 		}
 		glog.Info("Refreshed " + strconv.Itoa(amountOfFollowers) + " followers")
-		time.Sleep(120 * time.Minute)
+		time.Sleep(4 * 60 * time.Minute)
 	}
 }
