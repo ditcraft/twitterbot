@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
@@ -62,8 +61,6 @@ type incomingWebhook struct {
 
 // StartServer spins up a webserver for the API
 func StartServer() {
-	followerThreshold, _ = strconv.Atoi(os.Getenv("TWITTER_FOLLOWER_THRESHOLD"))
-
 	http.HandleFunc("/webhook/twitter", handleTwitterWebhook)
 	err := http.ListenAndServeTLS(":"+os.Getenv("TWITTER_WEB_HOOK_PORT"), os.Getenv("SERVER_SSL_CERT_PATH"), os.Getenv("SERVER_SLL_KEY_PATH"), nil)
 	if err != nil {
@@ -139,13 +136,13 @@ func handleTwitterWebhook(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+// InitializeWebhook will register and create the webhook through the twitter api
 func InitializeWebhook() error {
 	webhookID, err := database.GetKey("webhookID")
 	if err != nil {
 		return err
 	}
 
-	// If we don't already have a webhook ID we should create it
 	if webhookID == "" {
 		id, err := createWebhook()
 		if err != nil {
@@ -156,7 +153,6 @@ func InitializeWebhook() error {
 		database.SetKey("webhookID", id)
 	}
 
-	// And subscribe to TCRPartyVIP's DMs
 	if err := createSubscription(); err != nil {
 		return err
 	}
@@ -165,9 +161,6 @@ func InitializeWebhook() error {
 	return nil
 }
 
-// CreateWebhook creates a new webhook and subscribes it to the user, allowing
-// us to receive notifications for new DMs. This should only be used on the
-// TCRPartyVIP bot.
 func createWebhook() (string, error) {
 	client, _, err := GetClient()
 	if err != nil {
@@ -187,7 +180,6 @@ func createWebhook() (string, error) {
 	return webhook.ID, nil
 }
 
-// createSubscription subscribes the current webhook to the given user
 func createSubscription() error {
 	client, _, err := GetClient()
 	if err != nil {

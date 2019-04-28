@@ -25,6 +25,7 @@ type User struct {
 	DateOfContact           time.Time `bson:"date_of_contact"`
 	HasUsedClient           bool      `bson:"used_client"`
 	HasBeenAskedForFeedback bool      `bson:"asked_for_feedback"`
+	HasProvidedFeedback     bool      `bson:"provided_feedback"`
 }
 
 // GetUser returns a user object when the user exists
