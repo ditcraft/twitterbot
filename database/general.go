@@ -71,9 +71,11 @@ func UpdateUser(_existingUser User) error {
 		"eth_address":         _existingUser.ETHAddress,
 		"passed_kyc_demo":     _existingUser.PassedKYCDemo,
 		"passed_kyc_live":     _existingUser.PassedKYCLive,
+		"skip_kyc":            _existingUser.SkipKYC,
 		"date_of_contact":     _existingUser.DateOfContact,
 		"used_client":         _existingUser.HasUsedClient,
 		"asked_for_feedback":  _existingUser.HasBeenAskedForFeedback,
+		"provided_feedback":   _existingUser.HasProvidedFeedback,
 	}}
 	err := mgoRequest("users", func(c *mgo.Collection) error {
 		return c.Update(where, change)
