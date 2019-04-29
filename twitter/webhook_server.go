@@ -10,8 +10,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ditcraft/twitterbot/database"
 	"github.com/golang/glog"
-	"github.com/marvinkruse/dit-twitterbot/database"
 	"github.com/stevenleeg/go-twitter/twitter"
 )
 

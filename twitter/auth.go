@@ -6,8 +6,8 @@ import (
 
 	"github.com/dghubble/oauth1"
 	twitterOAuth "github.com/dghubble/oauth1/twitter"
+	"github.com/ditcraft/twitterbot/database"
 	"github.com/golang/glog"
-	"github.com/marvinkruse/dit-twitterbot/database"
 	"github.com/stevenleeg/go-twitter/twitter"
 )
 

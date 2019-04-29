@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ditcraft/twitterbot/smartcontracts/ditCoordinator"
+	"github.com/ditcraft/twitterbot/smartcontracts/ditToken"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/marvinkruse/dit-twitterbot/smartcontracts/ditCoordinator"
-	"github.com/marvinkruse/dit-twitterbot/smartcontracts/ditToken"
 )
 
 // Mutex to keep the nonces in order

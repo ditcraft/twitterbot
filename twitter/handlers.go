@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/EagleChen/mapmutex"
+	"github.com/ditcraft/twitterbot/database"
+	"github.com/ditcraft/twitterbot/ethereum"
+	"github.com/ditcraft/twitterbot/kyc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/golang/glog"
-	"github.com/marvinkruse/dit-twitterbot/database"
-	"github.com/marvinkruse/dit-twitterbot/ethereum"
-	"github.com/marvinkruse/dit-twitterbot/kyc"
 )
 
 // PerUserMutex will block on a userid basis to prevent spamming from one user

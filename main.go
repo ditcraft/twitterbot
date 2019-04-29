@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/EagleChen/mapmutex"
+	"github.com/ditcraft/twitterbot/database"
+	"github.com/ditcraft/twitterbot/twitter"
 	"github.com/golang/glog"
 	"github.com/joho/godotenv"
-	"github.com/marvinkruse/dit-twitterbot/database"
-	"github.com/marvinkruse/dit-twitterbot/twitter"
 )
 
 func main() {
