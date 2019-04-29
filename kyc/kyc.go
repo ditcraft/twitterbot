@@ -43,11 +43,13 @@ func Check(_user *twitter.User) (bool, bool) {
 	// he'll be qualified to use the demo mode only
 	if _user.FollowersCount < followerCountHigh || _user.StatusesCount < statusesCountHigh {
 		basicKYCpassed = true
+		fullKYCpassed = false
 	}
 
 	// If the user has more than the high-kyc amounts, he'll be qualified to use
 	// the live mode as well
 	if _user.FollowersCount >= followerCountHigh && _user.StatusesCount >= statusesCountHigh {
+		basicKYCpassed = true
 		fullKYCpassed = true
 	}
 

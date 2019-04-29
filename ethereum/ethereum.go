@@ -98,7 +98,9 @@ func SendDitTokens(_targetAddress string) error {
 		return err
 	}
 
-	if oldxDitBalance.Cmp(bigIntWeiValue) != -1 {
+	amountToGive := new(big.Int).Sub(bigIntWeiValue, oldxDitBalance)
+
+	if amountToGive.Cmp(big.NewInt(0)) != 1 || amountToGive.Cmp(bigIntWeiValue) == 1 {
 		return nil
 	}
 
@@ -107,7 +109,7 @@ func SendDitTokens(_targetAddress string) error {
 		return err
 	}
 
-	_, err = ditTokenInstance.Mint(auth, targetAddress, bigIntWeiValue)
+	_, err = ditTokenInstance.Mint(auth, targetAddress, amountToGive)
 	if err != nil {
 		return err
 	}
@@ -151,7 +153,9 @@ func SendXDaiCent(_targetAddress string) error {
 		return err
 	}
 
-	if xDaiBalanceTarget.Cmp(weiAmount) != -1 {
+	amountToGive := new(big.Int).Sub(weiAmount, xDaiBalanceTarget)
+
+	if amountToGive.Cmp(big.NewInt(0)) != 1 || amountToGive.Cmp(weiAmount) == 1 {
 		return nil
 	}
 
@@ -195,7 +199,7 @@ func SendXDaiCent(_targetAddress string) error {
 		gasPrice = defaultGasPrice
 	}
 
-	value := weiAmount
+	value := amountToGive
 	gasLimit := uint64(21000)
 
 	// Converting the private key string into a private key object

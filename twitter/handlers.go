@@ -398,6 +398,10 @@ func retryKYC(_username string) string {
 	}
 
 	passedKYC, passedFullKYC := kyc.Check(twitterUser)
+	if userObject.SkipKYC {
+		passedKYC = true
+		passedFullKYC = true
+	}
 	if !passedKYC {
 		return "User hasn't passed the KYC, you can pre-approve him with '!kyc " + twitterUser.ScreenName + "' and then try again"
 	}
@@ -408,7 +412,7 @@ func retryKYC(_username string) string {
 		return "There was an error while executing the KYC for user " + _username
 	}
 
-	return "Successfully resetted KYC for user " + _username
+	return "Successfully redid KYC and ETH txs for user " + _username
 }
 
 func handleCommand(_user string, _userID string, _text string) (bool, error) {
