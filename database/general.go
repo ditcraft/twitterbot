@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,6 +40,27 @@ func GetUser(_twitterID string) (*User, error) {
 	}
 
 	return &foundUsers, nil
+}
+
+// GetUsersForFeedback returns an array of users that
+// passed the KYC but haven't provided feedback yet
+func GetUsersForFeedback() ([]User, error) {
+	var foundUsers []User
+	err := mgoRequest("users", func(c *mgo.Collection) error {
+		afterDays, _ := strconv.Atoi(os.Getenv("ASK_FOR_FEEDBACK_AFTER_DAYS"))
+		daysAgo := time.Now().AddDate(0, 0, -afterDays)
+		return c.Find(bson.M{
+			"asked_for_feedback": false,
+			"provided_feedback":  false,
+			"passed_kyc_demo":    true,
+			"date_of_contact":    bson.M{"$lte": daysAgo},
+		}).All(&foundUsers)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return foundUsers, nil
 }
 
 // UpdateUser updates an existing user in the database

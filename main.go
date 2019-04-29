@@ -61,5 +61,10 @@ func main() {
 	// Start twitter follower update service
 	go twitter.GetFollowers()
 
+	time.Sleep(2 * time.Second)
+
+	// Start twitter ask for feedback service
+	go twitter.AskForFeedback()
+
 	select {}
 }

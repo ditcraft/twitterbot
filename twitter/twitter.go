@@ -131,6 +131,6 @@ func GetFollowers() {
 			}
 		}
 		glog.Info("Refreshed " + strconv.Itoa(amountOfFollowers) + " followers")
-		time.Sleep(6 * 60 * time.Minute)
+		time.Sleep(6 * time.Hour)
 	}
 }

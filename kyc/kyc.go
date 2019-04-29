@@ -19,8 +19,8 @@ func hasEnoughFollowers(_user *twitter.User, _amountOfFollowers int) bool {
 
 // Check will perform a KYC
 func Check(_user *twitter.User) (bool, bool) {
-	lowKYCpassed := false
-	highKYCpassed := false
+	basicKYCpassed := false
+	fullKYCpassed := false
 
 	// If the user is verified on twitter (blue checkmark) he is
 	// automatically fully verified
@@ -42,13 +42,13 @@ func Check(_user *twitter.User) (bool, bool) {
 	// If the user has more then the low-kyc amounts but less than the high-kyc amounts
 	// he'll be qualified to use the demo mode only
 	if _user.FollowersCount < followerCountHigh || _user.StatusesCount < statusesCountHigh {
-		lowKYCpassed = true
+		basicKYCpassed = true
 	}
 
 	// If the user has more than the high-kyc amounts, he'll be qualified to use
 	// the live mode as well
 	if _user.FollowersCount >= followerCountHigh && _user.StatusesCount >= statusesCountHigh {
-		highKYCpassed = true
+		fullKYCpassed = true
 	}
 
 	// Correction of the outcome based on the account age, to prevent new fake accounts
@@ -60,12 +60,12 @@ func Check(_user *twitter.User) (bool, bool) {
 	highTimeAgo := time.Now().AddDate(0, 0, -highDays)
 
 	if !createDate.Before(lowTimeAgo) {
-		lowKYCpassed = false
-		highKYCpassed = false
+		basicKYCpassed = false
+		fullKYCpassed = false
 	}
 	if !createDate.Before(highTimeAgo) {
-		highKYCpassed = false
+		fullKYCpassed = false
 	}
 
-	return lowKYCpassed, highKYCpassed
+	return basicKYCpassed, fullKYCpassed
 }

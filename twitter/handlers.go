@@ -229,6 +229,30 @@ func handleKYCApprove(_userID string, _userName string, _ethAddress string, _via
 	return os.Getenv("TWITTER_RESPONSE_SUCCESS")
 }
 
+// AskForFeedback will periodically ask users for feedback after they've done the KYC
+func AskForFeedback() {
+	for {
+		users, err := database.GetUsersForFeedback()
+		if err != nil {
+			glog.Error(err)
+		} else {
+			for i := range users {
+				if users[i].HasUsedClient {
+					sendDM(users[i].TwitterScreenName, users[i].TwitterID, os.Getenv("TWITTER_ASK_FOR_FEEDBACK_USED"))
+				} else {
+					sendDM(users[i].TwitterScreenName, users[i].TwitterID, os.Getenv("TWITTER_ASK_FOR_FEEDBACK_NOT_USED"))
+				}
+				users[i].HasBeenAskedForFeedback = true
+				err := database.UpdateUser(users[i])
+				if err != nil {
+					glog.Error(err)
+				}
+			}
+		}
+		time.Sleep(6 * time.Hour)
+	}
+}
+
 func alertAdmin(_text string) {
 	err := sendDM(os.Getenv("TWITTER_ALERT_ADMIN_USER_NAME"), os.Getenv("TWITTER_ALERT_ADMIN_USER_ID"), _text)
 	if err != nil {
