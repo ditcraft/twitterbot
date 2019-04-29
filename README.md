@@ -4,7 +4,16 @@ The ditCraft Twitter bot is an automated piece of software that interacts with f
 In the future, the Twitter bot will receive updates including more features.
 
 ## Running this bot yourself
-You like the idea and want to use a Twitter bot in your own project? Go ahead - we embrace open source! In order to work, this bot needs an .env file in the same directory, containing the following things:
+You like the idea and want to use a demo validator in your own project? Go ahead - we embrace open source!
+
+* Run `go get github.com/ditcraft/twitterbot`
+    * Note: Since this is a go project, golang-go needs to be installed
+* Enter the directory of the demo-validator with `cd $GOPATH/src/github.com/ditcraft/twitterbot`
+* Install the necessary dependencies with `go get -d ./...`
+* Run with `sudo go run main.go`
+    * Note: We need sudo rights, since the twitter bot accesses the letsencrypt SSL certs
+
+Additionally, in order to work, this bot needs an .env file in the same directory, containing the following things:
 
 ```
 TWITTER_CONSUMER_KEY=
