@@ -107,7 +107,12 @@ func CreateUser(_newUser User) error {
 func getSession() (*mgo.Session, error) {
 	if mgoSession == nil {
 		var mgoErr error
-		mgoSession, mgoErr = mgo.DialWithTimeout(os.Getenv("MONGO_DB_ADDRESS"), 5*time.Second)
+		mgoSession, mgoErr = mgo.DialWithInfo(
+			&mgo.DialInfo{Addrs: []string{os.Getenv("MONGO_DB_ADDRESS")},
+				Timeout:  10 * time.Second,
+				Database: "twitterbot",
+				Username: os.Getenv("MONGO_DB_USER"),
+				Password: os.Getenv("MONGO_DB_PASSWORD")})
 		if mgoErr != nil {
 			return nil, mgoErr
 		}
