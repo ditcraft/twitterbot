@@ -61,8 +61,8 @@ type incomingWebhook struct {
 
 // StartServer spins up a webserver for the API
 func StartServer() {
-	http.HandleFunc("/webhook/twitter", handleTwitterWebhook)
-	err := http.ListenAndServeTLS(":"+os.Getenv("TWITTER_WEB_HOOK_PORT"), os.Getenv("SERVER_SSL_CERT_PATH"), os.Getenv("SERVER_SLL_KEY_PATH"), nil)
+	http.HandleFunc("/", handleTwitterWebhook)
+	err := http.ListenAndServe(":"+os.Getenv("TWITTER_WEB_HOOK_PORT"), nil)
 	if err != nil {
 		glog.Error(err)
 	}
