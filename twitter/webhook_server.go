@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/ditcraft/twitterbot/database"
 	"github.com/golang/glog"
@@ -97,34 +96,34 @@ func handleTwitterWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(data.DirectMessageEvents) > 0 {
-		for i := range data.DirectMessageEvents {
-			if data.DirectMessageEvents[i].MessageCreated.SenderID != os.Getenv("TWITTER_ID") {
-				handleNewDM(
-					data.User[data.DirectMessageEvents[i].MessageCreated.SenderID].ScreenName,
-					data.DirectMessageEvents[i].MessageCreated.SenderID,
-					int(data.User[data.DirectMessageEvents[i].MessageCreated.SenderID].FollowersCount),
-					data.DirectMessageEvents[i].MessageCreated.MessageData.Text,
-				)
-			}
-		}
-	}
+	// if len(data.DirectMessageEvents) > 0 {
+	// 	for i := range data.DirectMessageEvents {
+	// 		if data.DirectMessageEvents[i].MessageCreated.SenderID != os.Getenv("TWITTER_ID") {
+	// 			handleNewDM(
+	// 				data.User[data.DirectMessageEvents[i].MessageCreated.SenderID].ScreenName,
+	// 				data.DirectMessageEvents[i].MessageCreated.SenderID,
+	// 				int(data.User[data.DirectMessageEvents[i].MessageCreated.SenderID].FollowersCount),
+	// 				data.DirectMessageEvents[i].MessageCreated.MessageData.Text,
+	// 			)
+	// 		}
+	// 	}
+	// }
 
-	if len(data.TweetCreateEvents) > 0 {
-		for i := range data.TweetCreateEvents {
-			if data.ForUserID == os.Getenv("TWITTER_ID") && data.TweetCreateEvents[i].User.ID != os.Getenv("TWITTER_ID") {
-				if !strings.HasPrefix("RT", data.TweetCreateEvents[i].Text) {
-					handleNewTweet(
-						data.TweetCreateEvents[i].IDStr,
-						data.TweetCreateEvents[i].User.ScreenName,
-						data.TweetCreateEvents[i].User.ID,
-						int(data.TweetCreateEvents[i].User.FollowersCount),
-						data.TweetCreateEvents[i].Text,
-					)
-				}
-			}
-		}
-	}
+	// if len(data.TweetCreateEvents) > 0 {
+	// 	for i := range data.TweetCreateEvents {
+	// 		if data.ForUserID == os.Getenv("TWITTER_ID") && data.TweetCreateEvents[i].User.ID != os.Getenv("TWITTER_ID") {
+	// 			if !strings.HasPrefix("RT", data.TweetCreateEvents[i].Text) {
+	// 				handleNewTweet(
+	// 					data.TweetCreateEvents[i].IDStr,
+	// 					data.TweetCreateEvents[i].User.ScreenName,
+	// 					data.TweetCreateEvents[i].User.ID,
+	// 					int(data.TweetCreateEvents[i].User.FollowersCount),
+	// 					data.TweetCreateEvents[i].Text,
+	// 				)
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	if len(data.FollowEvents) > 0 {
 		for _, newFollower := range data.FollowEvents {

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	mgo "gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	"github.com/globalsign/mgo"
+	"github.com/globalsign/mgo/bson"
 )
 
 var mgoSession *mgo.Session
@@ -29,10 +29,26 @@ type User struct {
 	HasProvidedFeedback     bool      `bson:"provided_feedback"`
 }
 
+// NotificationProposalStarted struct
+type NotificationProposalStarted struct {
+	TwitterID         string    `json:"twitter_id" bson:"twitter_id"`
+	LiveMode          bool      `json:"live_mode" bson:"live_mode"`
+	RepositoryHash    string    `json:"repository_hash" bson:"repository_hash"`
+	RepositoryName    string    `json:"repository_name" bson:"repository_name"`
+	KNWVoteID         int       `json:"knw_vote_id" bson:"knw_vote_id"`
+	KnowledgeLabel    string    `json:"knowledge_label" bson:"knowledge_label"`
+	ProposerTwitterID string    `json:"proposer_twitter_id" bson:"proposer_twitter_id"`
+	ProposerGithubID  string    `json:"proposer_github_handle" bson:"proposer_github_handle"`
+	Description       string    `json:"description" bson:"description"`
+	Identifier        string    `json:"identifier" bson:"identifier"`
+	CommitUntil       time.Time `json:"commit_until" bson:"commit_until"`
+	RevealUntil       time.Time `json:"reveal_until" bson:"reveal_until"`
+}
+
 // GetUser returns a user object when the user exists
 func GetUser(_twitterID string) (*User, error) {
 	var foundUsers User
-	err := mgoRequest("users", func(c *mgo.Collection) error {
+	err := MgoRequest("users", func(c *mgo.Collection) error {
 		return c.Find(bson.M{"twitter_id": _twitterID}).One(&foundUsers)
 	})
 	if err != nil {
@@ -46,7 +62,7 @@ func GetUser(_twitterID string) (*User, error) {
 // passed the KYC but haven't provided feedback yet
 func GetUsersForFeedback() ([]User, error) {
 	var foundUsers []User
-	err := mgoRequest("users", func(c *mgo.Collection) error {
+	err := MgoRequest("users", func(c *mgo.Collection) error {
 		afterDays, _ := strconv.Atoi(os.Getenv("ASK_FOR_FEEDBACK_AFTER_DAYS"))
 		daysAgo := time.Now().AddDate(0, 0, -afterDays)
 		return c.Find(bson.M{
@@ -77,7 +93,7 @@ func UpdateUser(_existingUser User) error {
 		"asked_for_feedback":  _existingUser.HasBeenAskedForFeedback,
 		"provided_feedback":   _existingUser.HasProvidedFeedback,
 	}}
-	err := mgoRequest("users", func(c *mgo.Collection) error {
+	err := MgoRequest("users", func(c *mgo.Collection) error {
 		return c.Update(where, change)
 	})
 	if err != nil {
@@ -94,7 +110,7 @@ func CreateUser(_newUser User) error {
 		return errors.New("Failed to check whether this user already exists")
 	}
 
-	err = mgoRequest("users", func(c *mgo.Collection) error {
+	err = MgoRequest("users", func(c *mgo.Collection) error {
 		return c.Insert(_newUser)
 	})
 	if err != nil {
@@ -121,7 +137,8 @@ func getSession() (*mgo.Session, error) {
 	return mgoSession.Clone(), nil
 }
 
-func mgoRequest(collection string, s func(*mgo.Collection) error) error {
+// MgoRequest will interact with the database
+func MgoRequest(collection string, s func(*mgo.Collection) error) error {
 	session, mgoErr := getSession()
 	if mgoErr != nil {
 		return mgoErr

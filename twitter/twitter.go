@@ -3,6 +3,7 @@ package twitter
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -41,7 +42,7 @@ func sendTweet(_tweetID string, _username string, _text string) error {
 	return nil
 }
 
-func sendDM(_user string, _userID string, _text string) error {
+func respondToDM(_user string, _userID string, _text string) error {
 	client, _, err := GetClient()
 	if err != nil {
 		return err
@@ -66,7 +67,42 @@ func sendDM(_user string, _userID string, _text string) error {
 		return err
 	}
 
-	glog.Info("[DM] Responded to " + _user + " with: " + _text)
+	glog.Info("[DM] Responded to " + _user + " with: " + strings.Replace(_text, "\n", "", -1))
+
+	if _text == os.Getenv("TWITTER_RESPONSE_ERROR") {
+		alertAdmin(_user + os.Getenv("TWITTER_ADMIN_NOTIFY_PROBLEM"))
+	}
+
+	return nil
+}
+
+// SendDM will send a specific DM to a user
+func SendDM(_user string, _userID string, _text string) error {
+	client, _, err := GetClient()
+	if err != nil {
+		return err
+	}
+
+	awaitRatelimit()
+
+	_, _, err = client.DirectMessages.EventsNew(&twitter.DirectMessageEventsNewParams{
+		Event: &twitter.DirectMessageEvent{
+			Type: "message_create",
+			Message: &twitter.DirectMessageEventMessage{
+				Target: &twitter.DirectMessageTarget{
+					RecipientID: _userID,
+				},
+				Data: &twitter.DirectMessageData{
+					Text: _text,
+				},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	glog.Info("[DM] Sent DM to " + _user + " with: " + strings.Replace(_text, "\n", "", -1))
 
 	if _text == os.Getenv("TWITTER_RESPONSE_ERROR") {
 		alertAdmin(_user + os.Getenv("TWITTER_ADMIN_NOTIFY_PROBLEM"))
@@ -94,6 +130,29 @@ func getUser(_screenName string) (*twitter.User, error) {
 	user.Following = isFollower[user.IDStr]
 
 	return user, nil
+}
+
+// getScreenname retrieves a twitter users screenname
+func getScreenname(_id string) (string, error) {
+	_client, _, err := GetClient()
+	if err != nil {
+		return "", err
+	}
+
+	awaitRatelimit()
+
+	idInt64, err := strconv.ParseInt(_id, 10, 64)
+	if err != nil {
+		return "", err
+	}
+	user, _, err := _client.Users.Show(&twitter.UserShowParams{
+		UserID: idInt64,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return user.ScreenName, nil
 }
 
 // GetFollowers will start a periodic watcher retrieving the

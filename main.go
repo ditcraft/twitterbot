@@ -66,5 +66,8 @@ func main() {
 	// Start twitter ask for feedback service
 	go twitter.AskForFeedback()
 
+	// Start notification agent for new proposals
+	go twitter.WatchNotifications()
+
 	select {}
 }

@@ -1,8 +1,8 @@
 package database
 
 import (
-	mgo "gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	"github.com/globalsign/mgo"
+	"github.com/globalsign/mgo/bson"
 )
 
 type keyValue struct {
@@ -13,7 +13,7 @@ type keyValue struct {
 // SetKey updates or inserts a key with the provided value
 func SetKey(key string, value string) error {
 	newPair := keyValue{Key: key, Value: value}
-	err := mgoRequest("key_value_store", func(c *mgo.Collection) error {
+	err := MgoRequest("key_value_store", func(c *mgo.Collection) error {
 		return c.Insert(newPair)
 	})
 	if err != nil {
@@ -26,7 +26,7 @@ func SetKey(key string, value string) error {
 // GetKey fetches the given key's value from the database
 func GetKey(key string) (string, error) {
 	var keyValues []keyValue
-	err := mgoRequest("key_value_store", func(c *mgo.Collection) error {
+	err := MgoRequest("key_value_store", func(c *mgo.Collection) error {
 		return c.Find(nil).Sort("-created_when").All(&keyValues)
 	})
 	if err != nil {
@@ -41,7 +41,7 @@ func GetKey(key string) (string, error) {
 
 // ClearKey removes the given key's row from the database
 func ClearKey(key string) error {
-	err := mgoRequest("key_value_store", func(c *mgo.Collection) error {
+	err := MgoRequest("key_value_store", func(c *mgo.Collection) error {
 		_, err := c.RemoveAll(bson.M{"key": bson.M{"$eq": key}})
 		return err
 	})

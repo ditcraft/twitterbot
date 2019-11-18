@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	mgo "gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	"github.com/globalsign/mgo"
+	"github.com/globalsign/mgo/bson"
 )
 
 // OAuthToken stores the data required to control the two bots which act as the
@@ -33,7 +33,7 @@ func CreateOAuthToken() error {
 		CreatedAt:        time.Now(),
 	}
 
-	err := mgoRequest("oauth_session", func(c *mgo.Collection) error {
+	err := MgoRequest("oauth_session", func(c *mgo.Collection) error {
 		return c.Insert(newToken)
 	})
 	if err != nil {
@@ -48,7 +48,7 @@ func FindOAuthTokenByHandle(handle string) (*OAuthToken, error) {
 	handle = strings.ToLower(handle)
 
 	var oAuthTokenFromDB []OAuthToken
-	err := mgoRequest("oauth_session", func(c *mgo.Collection) error {
+	err := MgoRequest("oauth_session", func(c *mgo.Collection) error {
 		return c.Find(nil).Sort("-created_when").All(&oAuthTokenFromDB)
 	})
 	if err != nil {
@@ -63,7 +63,7 @@ func FindOAuthTokenByHandle(handle string) (*OAuthToken, error) {
 
 // Save saves the OAuthToken to the database
 func (token *OAuthToken) Save() error {
-	err := mgoRequest("oauth_session", func(c *mgo.Collection) error {
+	err := MgoRequest("oauth_session", func(c *mgo.Collection) error {
 		_, err := c.RemoveAll(bson.M{"twitter_handle": bson.M{"$eq": token.TwitterHandle}})
 		return err
 	})
@@ -71,7 +71,7 @@ func (token *OAuthToken) Save() error {
 		return err
 	}
 
-	err = mgoRequest("oauth_session", func(c *mgo.Collection) error {
+	err = MgoRequest("oauth_session", func(c *mgo.Collection) error {
 		return c.Insert(token)
 	})
 	if err != nil {
